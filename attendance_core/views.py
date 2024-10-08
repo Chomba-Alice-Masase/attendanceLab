@@ -5,6 +5,7 @@ from django.utils.timezone import now
 from django.shortcuts import render
 from django.http import JsonResponse
 import logging
+from django.utils.timezone import localtime, now
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ def check_in_or_out(request):
 
         if created:
             # Student is checking in
-            attendance.check_in_time = now()
+            attendance.check_in_time = now()  # This stores in UTC
             attendance.save()
             logger.info(f"Checked in: {student.first_name}")
             return Response({
@@ -38,12 +39,12 @@ def check_in_or_out(request):
                 'student': {
                     'first_name': student.first_name,
                     'last_name': student.last_name,
-                    'check_in_time': attendance.check_in_time.strftime("%Y-%m-%d %H:%M:%S")
+                    'check_in_time': localtime(attendance.check_in_time).strftime("%Y-%m-%d %H:%M:%S")
                 }
             }, status=200)
         else:
             # Student is checking out
-            attendance.check_out_time = now()
+            attendance.check_out_time = now()  # This stores in UTC
             attendance.save()
             logger.info(f"Checked out: {student.first_name}")
             return Response({
@@ -51,7 +52,7 @@ def check_in_or_out(request):
                 'student': {
                     'first_name': student.first_name,
                     'last_name': student.last_name,
-                    'check_out_time': attendance.check_out_time.strftime("%Y-%m-%d %H:%M:%S")
+                    'check_out_time': localtime(attendance.check_out_time).strftime("%Y-%m-%d %H:%M:%S")
                 }
             }, status=200)
 
@@ -72,7 +73,7 @@ def check_in_or_out(request):
                 'student': {
                     'first_name': new_student.first_name,
                     'last_name': new_student.last_name,
-                    'check_in_time': attendance.check_in_time.strftime("%Y-%m-%d %H:%M:%S")
+                    'check_in_time': localtime(attendance.check_in_time).strftime("%Y-%m-%d %H:%M:%S")
                 }
             }, status=201)
 
@@ -94,8 +95,10 @@ def attendance_data(request):
                 'first_name': record.student.first_name,
                 'last_name': record.student.last_name,
             },
-            'check_in_time': record.check_in_time.strftime("%Y-%m-%d %H:%M:%S") if record.check_in_time else None,
-            'check_out_time': record.check_out_time.strftime("%Y-%m-%d %H:%M:%S") if record.check_out_time else None,
+            'check_in_time': localtime(record.check_in_time).strftime(
+                "%Y-%m-%d %H:%M:%S") if record.check_in_time else None,
+            'check_out_time': localtime(record.check_out_time).strftime(
+                "%Y-%m-%d %H:%M:%S") if record.check_out_time else None,
         }
         for record in attendance_records
     ]
