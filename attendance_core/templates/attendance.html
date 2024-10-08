@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance System</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: white;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: blue;
+        }
+        #attendance-table {
+            margin: 20px auto;
+            width: 80%;
+            border-collapse: collapse;
+        }
+        #attendance-table th, #attendance-table td {
+            border: 1px solid blue;
+            padding: 10px;
+            text-align: center;
+        }
+        #attendance-table th {
+            background-color: blue;
+            color: white;
+        }
+        #attendance-table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .timestamp {
+            color: blue;
+        }
+
+        /* Custom Modal Styles */
+        #customModal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgb(0,0,0); /* Fallback color */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+
+        #modalContent {
+            background-color: #fefefe;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-Time Attendance Updates</h1>
+
+    <table id="attendance-table">
+        <thead>
+            <tr>
+                <th>Student Name</th>
+                <th>Check-in Time</th>
+                <th>Check-out Time</th>
+            </tr>
+        </thead>
+        <tbody id="attendance-data">
+            <!-- Data will be injected here by JavaScript -->
+        </tbody>
+    </table>
+
+    <!-- Custom Modal for creating a new student -->
+    <div id="customModal">
+        <div id="modalContent">
+            <span id="closeModal" style="float:right;cursor:pointer;">&times;</span>
+            <h5>Create New Student Profile</h5>
+            <form id="newStudentForm">
+                <div class="form-group">
+                    <label for="firstName">First Name</label>
+                    <input type="text" class="form-control" id="firstName" required>
+                </div>
+                <div class="form-group">
+                    <label for="lastName">Last Name</label>
+                    <input type="text" class="form-control" id="lastName" required>
+                </div>
+                <input type="hidden" id="rfid_uid" value=""> <!-- Hidden input to hold the UID -->
+                <button type="submit" class="btn btn-primary">Create Profile</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Function to fetch attendance data
+        function fetchAttendanceData() {
+            fetch("/api/attendance-data")
+                .then(response => response.json())
+                .then(data => {
+                    const attendanceData = document.getElementById("attendance-data");
+                    attendanceData.innerHTML = "";  // Clear previous data
+
+                    data.forEach(entry => {
+                        const row = `
+                            <tr>
+                                <td>${entry.student.first_name} ${entry.student.last_name}</td>
+                                <td class="timestamp">${entry.check_in_time || '-'}</td>
+                                <td class="timestamp">${entry.check_out_time || '-'}</td>
+                            </tr>
+                        `;
+                        attendanceData.innerHTML += row;
+                    });
+                })
+                .catch(error => console.error("Error fetching attendance data:", error));
+        }
+
+        // Fetch data every 5 seconds
+        setInterval(fetchAttendanceData, 5000);
+
+        // Initial fetch on page load
+        window.onload = fetchAttendanceData;
+
+        // Handle form submission for new student creation
+        document.getElementById("newStudentForm").addEventListener("submit", function(event) {
+            event.preventDefault();
+
+            const firstName = document.getElementById("firstName").value;
+            const lastName = document.getElementById("lastName").value;
+            const rfid_uid = document.getElementById("rfid_uid").value;
+
+            fetch('/api/check-in-or-out', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    first_name: firstName,
+                    last_name: lastName,
+                    rfid_uid: rfid_uid,
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Close the modal
+                document.getElementById("customModal").style.display = "none";
+                // Reset form fields
+                document.getElementById("newStudentForm").reset();
+                // Fetch updated attendance data
+                fetchAttendanceData();
+            })
+            .catch(error => console.error("Error creating student profile:", error));
+        });
+
+        // Function to check in/out based on UID
+        function checkInOut(rfid_uid) {
+            fetch('/api/check-in-or-out', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    rfid_uid: rfid_uid,
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'created') {
+                    // Set the RFID UID in the hidden input
+                    document.getElementById("rfid_uid").value = rfid_uid;
+                    // Show the custom modal for creating a new student
+                    document.getElementById("customModal").style.display = "block";
+                } else {
+                    // Handle other responses (check-in/check-out)
+                    fetchAttendanceData();
+                }
+            })
+            .catch(error => console.error("Error checking in/out:", error));
+        }
+
+        // Close the modal when clicking on <span> (x)
+        document.getElementById("closeModal").onclick = function() {
+            document.getElementById("customModal").style.display = "none";
+        }
+
+        // Close the modal if the user clicks anywhere outside of the modal
+        window.onclick = function(event) {
+            if (event.target == document.getElementById("customModal")) {
+                document.getElementById("customModal").style.display = "none";
+            }
+        }
+    </script>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.0.0/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
